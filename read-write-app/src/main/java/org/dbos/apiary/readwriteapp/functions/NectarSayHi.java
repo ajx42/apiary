@@ -7,7 +7,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 
 public class NectarSayHi extends PostgresFunction {
-
+    // Just a function to test that application is alive!
     public static String runFunction(PostgresContext ctxt, String name) throws SQLException {
       String welcome = "Hello!";
       String response = welcome + " " + name;

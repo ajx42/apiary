@@ -1,4 +1,4 @@
-package org.dbos.apiary.readwriteapp;
+package org.dbos.apiary.readwriteapp.messages;
 
 public class HelloMsg {
 

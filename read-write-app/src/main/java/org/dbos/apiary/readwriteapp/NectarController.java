@@ -3,6 +3,10 @@ package org.dbos.apiary.readwriteapp;
 import com.google.protobuf.InvalidProtocolBufferException;
 import org.dbos.apiary.postgres.PostgresConnection;
 import org.dbos.apiary.readwriteapp.functions.NectarSayHi;
+import org.dbos.apiary.readwriteapp.functions.NectarInitialiseNewObject;
+import org.dbos.apiary.readwriteapp.messages.HelloMsg;
+import org.dbos.apiary.readwriteapp.messages.InitialiseMsg;
+import org.dbos.apiary.readwriteapp.ObjectIdManager;
 import org.dbos.apiary.utilities.ApiaryConfig;
 import org.dbos.apiary.worker.ApiaryNaiveScheduler;
 import org.dbos.apiary.worker.ApiaryWorker;
@@ -25,6 +29,7 @@ import java.util.List;
 @RestController
 public class NectarController {
     ApiaryWorkerClient client;
+    ObjectIdManager oMgr;
 
     public NectarController() throws SQLException {
         ApiaryConfig.captureUpdates = true;
@@ -32,22 +37,29 @@ public class NectarController {
         ApiaryConfig.provenancePort = 5432;  // Store provenance data in the same database.
 
         PostgresConnection conn = new PostgresConnection("localhost", ApiaryConfig.postgresPort, "postgres", "dbos");
-        conn.dropTable("WebsiteLogins"); // For testing.
-        conn.dropTable("WebsitePosts"); // For testing.
-        conn.createTable("WebsiteLogins", "Username VARCHAR(1000) PRIMARY KEY NOT NULL, Password VARCHAR(1000) NOT NULL");
-        conn.createTable("WebsitePosts", "Sender VARCHAR(1000) NOT NULL, Receiver VARCHAR(1000) NOT NULL, PostText VARCHAR(10000) NOT NULL");
+        conn.dropTable("ObjectStore"); // For testing.
+        conn.createTable("ObjectStore", "ObjectId INT NOT NULL, Key INT NOT NULL, Val TEXT");
 
         ApiaryWorker apiaryWorker = new ApiaryWorker(new ApiaryNaiveScheduler(), 4, ApiaryConfig.postgres, ApiaryConfig.provenanceDefaultAddress);
         apiaryWorker.registerConnection(ApiaryConfig.postgres, conn);
         apiaryWorker.registerFunction("NectarSayHi", ApiaryConfig.postgres, NectarSayHi::new);
+        apiaryWorker.registerFunction("NectarInitialiseNewObject", ApiaryConfig.postgres, NectarInitialiseNewObject::new);
         apiaryWorker.startServing();
 
         this.client = new ApiaryWorkerClient("localhost");
+        this.oMgr = new ObjectIdManager();
     }
 
     @PostMapping("/sayhi")
     public String registrationSubmit(@RequestBody HelloMsg msg) throws IOException {
         String welcomeMsg = client.executeFunction("NectarSayHi", msg.getName()).getString();
         return welcomeMsg;
+    }
+
+    @PostMapping("/initialise")
+    public int registrationSubmit(@RequestBody InitialiseMsg msg) throws IOException {
+        int objectId = oMgr.incrementAndGet();
+        client.executeFunction("NectarInitialiseNewObject", objectId, msg.getNumEntries(), msg.getEntrySize());
+        return objectId;
     }
 }
