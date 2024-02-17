@@ -4,8 +4,11 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import org.dbos.apiary.postgres.PostgresConnection;
 import org.dbos.apiary.readwriteapp.functions.NectarSayHi;
 import org.dbos.apiary.readwriteapp.functions.NectarInitialiseNewObject;
+import org.dbos.apiary.readwriteapp.functions.NectarReadWriteOperation;
 import org.dbos.apiary.readwriteapp.messages.HelloMsg;
 import org.dbos.apiary.readwriteapp.messages.InitialiseMsg;
+import org.dbos.apiary.readwriteapp.messages.MultiReadWriteMsg;
+import org.dbos.apiary.readwriteapp.messages.SingleReadWriteMsg;
 import org.dbos.apiary.readwriteapp.ObjectIdManager;
 import org.dbos.apiary.utilities.ApiaryConfig;
 import org.dbos.apiary.worker.ApiaryNaiveScheduler;
@@ -44,6 +47,7 @@ public class NectarController {
         apiaryWorker.registerConnection(ApiaryConfig.postgres, conn);
         apiaryWorker.registerFunction("NectarSayHi", ApiaryConfig.postgres, NectarSayHi::new);
         apiaryWorker.registerFunction("NectarInitialiseNewObject", ApiaryConfig.postgres, NectarInitialiseNewObject::new);
+        apiaryWorker.registerFunction("NectarReadWriteOperation", ApiaryConfig.postgres, NectarReadWriteOperation::new);
         apiaryWorker.startServing();
 
         this.client = new ApiaryWorkerClient("localhost");
@@ -57,9 +61,26 @@ public class NectarController {
     }
 
     @PostMapping("/initialise")
-    public int registrationSubmit(@RequestBody InitialiseMsg msg) throws IOException {
+    public int initialiseObject(@RequestBody InitialiseMsg msg) throws IOException {
         int objectId = oMgr.incrementAndGet();
         client.executeFunction("NectarInitialiseNewObject", objectId, msg.getNumEntries(), msg.getEntrySize());
         return objectId;
     }
+
+    @PostMapping("/multireadwrite")
+    public void multiReadWrite(@RequestBody MultiReadWriteMsg msg) throws IOException {
+        // Ideally, we should be having a multithreaded approach here.
+        // TODO: Add a connection pool and do this in parallel.B
+        for ( int objectId : msg.getObjectIds() ) {
+           client.executeFunction("NectarReadWriteOperation", objectId,
+               msg.getOpsPerObject(), msg.getEntriesPerObject(), msg.getEntrySize(), msg.getWriteChance());
+        }
+    }
+
+    @PostMapping("/singlereadwrite")
+    public void singleReadWrite(@RequestBody SingleReadWriteMsg msg) throws IOException {
+        client.executeFunction("NectarReadWriteOperation", msg.getObjectId(),
+            msg.getNumOps(), msg.getNumEntries(), msg.getEntrySize(), msg.getWriteChance());
+    }
 }
+
